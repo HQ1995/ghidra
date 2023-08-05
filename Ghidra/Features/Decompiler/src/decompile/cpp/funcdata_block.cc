@@ -16,6 +16,8 @@
 #include "funcdata.hh"
 #include "flow.hh"
 
+#include <functional>
+
 namespace ghidra {
 
 // Funcdata members pertaining directly to blocks
@@ -1086,6 +1088,92 @@ void Funcdata::spliceBlockBasic(BlockBasic *bl)
   bl->mergeRange(outbl);	// Update the address cover
   bblocks.spliceBlock(bl);
   structureReset();
+}
+
+/// \brief escape a label string for dot language
+///
+/// From svf/lib/Graphs/GraphWriter.cpp
+/// \param Label the label needs to be escaped
+/// \return escaped label for dot language
+std::string EscapeStr(const std::string &Label)
+{
+    std::string Str(Label);
+    for (unsigned i = 0; i != Str.length(); ++i)
+        switch (Str[i])
+        {
+        case '\n':
+            Str.insert(Str.begin()+i, '\\');  // Escape character...
+            ++i;
+            Str[i] = 'n';
+            break;
+        case '\t':
+            Str.insert(Str.begin()+i, ' ');  // Convert to two spaces
+            ++i;
+            Str[i] = ' ';
+            break;
+        case '\\':
+            if (i+1 != Str.length())
+                switch (Str[i+1])
+                {
+                case 'l':
+                    continue; // don't disturb \l
+                case '|':
+                case '{':
+                case '}':
+                    Str.erase(Str.begin()+i);
+                    continue;
+                default:
+                    break;
+                }
+        case '{':
+        case '}':
+        case '<':
+        case '>':
+        case '|':
+        case '"':
+            Str.insert(Str.begin()+i, '\\');  // Escape character...
+            ++i;  // don't infinite loop
+            break;
+        }
+    return Str;
+}
+
+/// \brief Dump a graph of the CFG.
+/// 
+/// \param filename File name of the dumped graph.
+void Funcdata::dumpDotGraph(const char* filename)
+{
+  if(bblocks.getSize() == 0) {
+    throw RecovError("CFG not generated");
+  }
+
+  std::string str;
+  std::stringstream ss(str);
+  std::set<int4> visited;
+
+  std::function<void(FlowBlock*)> visitor = [&](FlowBlock* current) -> void {
+    std::stringstream label;
+    if(visited.find(current->getIndex()) == visited.end()) {
+      current->printRaw(label);
+      ss << "\tNode" << current->getIndex() << " [shape=record,shape=box,label=\"" << EscapeStr(label.str()) << "\"];\n";
+      visited.insert(current->getIndex());
+      for(int4 i=0;i<current->sizeOut();i++) {
+        auto *next = current->getOut(i);
+        ss << "\tNode" << current->getIndex() << ":s" << i << " -> " << "Node" << next->getIndex() << " [color=black];\n";
+        visitor(next);
+      }
+    }
+  };
+
+  // SVF has some good GraphWriter
+  ss << "digraph \"" << getName() << "\" {\n";
+  ss << "\tlabel = \"CFG\";\n\n"; 
+  visitor(bblocks.getStartBlock()); 
+  ss << "}\n";
+
+  std::ofstream ofs(filename);
+  ofs << ss.str();
+  return;
 }
 
 } // End namespace ghidra

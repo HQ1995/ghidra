@@ -529,6 +529,7 @@ public:
   BlockGraph &getStructure(void) { return sblocks; } 	///< Get the current control-flow structuring hierarchy
   const BlockGraph &getStructure(void) const { return sblocks; }	///< Get the current control-flow structuring hierarchy
   const BlockGraph &getBasicBlocks(void) const { return bblocks; }	///< Get the basic blocks container
+  void dumpDotGraph(const char* filename); ///< Dump a graph of the CFG
 
   /// \brief Set the initial ownership range for the given basic block
   ///
